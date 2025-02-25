@@ -1,0 +1,670 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.awt.geom.Point2D;
+
+public class SpaceTowerDefense extends JPanel implements ActionListener, MouseListener {
+    // Window dimensions
+    private static final int WIDTH = 800;
+    private static final int HEIGHT = 600;
+    
+    // Game state
+    private int money = 100;
+    private int health = 100;
+    private int round = 1;
+    private boolean gameOver = false;
+    private Timer gameTimer;
+    private long lastSpawnTime = 0;
+    private long spawnDelay = 2000;
+    private int shipsToSpawn = 5;
+    private int shipsSpawned = 0;
+    
+    // Game elements
+    private ArrayList<Tower> towers = new ArrayList<>();
+    private ArrayList<Spaceship> spaceships = new ArrayList<>();
+    private ArrayList<Projectile> projectiles = new ArrayList<>();
+    private ArrayList<Point> placementLocations = new ArrayList<>();
+    private Tower selectedTower = null;
+    private Point2D.Float[] path;
+    
+    // Current placement position when building
+    private Point currentPlacement = null;
+    
+    public SpaceTowerDefense() {
+        setPreferredSize(new Dimension(WIDTH, HEIGHT));
+        setBackground(Color.BLACK);
+        addMouseListener(this);
+        
+        // Initialize game timer (60 FPS)
+        gameTimer = new Timer(16, this);
+        
+        // Define path points (x, y coordinates)
+        path = new Point2D.Float[] {
+            new Point2D.Float(-50, 300),  // Start off-screen
+            new Point2D.Float(100, 300),
+            new Point2D.Float(200, 300),
+            new Point2D.Float(300, 200),
+            new Point2D.Float(400, 200),
+            new Point2D.Float(500, 300),
+            new Point2D.Float(600, 300),
+            new Point2D.Float(700, 200),
+            new Point2D.Float(850, 200)   // End off-screen
+        };
+        
+        // Define tower placement locations
+        placementLocations.add(new Point(150, 240));
+        placementLocations.add(new Point(150, 360));
+        placementLocations.add(new Point(250, 240));
+        placementLocations.add(new Point(250, 360));
+        placementLocations.add(new Point(350, 140));
+        placementLocations.add(new Point(350, 260));
+        placementLocations.add(new Point(450, 140));
+        placementLocations.add(new Point(450, 260));
+        placementLocations.add(new Point(550, 240));
+        placementLocations.add(new Point(550, 360));
+        placementLocations.add(new Point(650, 240));
+        placementLocations.add(new Point(650, 360));
+        
+        gameTimer.start();
+    }
+    
+    // Main game loop
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        if (gameOver) return;
+        
+        // Spawn spaceships
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - lastSpawnTime > spawnDelay && shipsSpawned < shipsToSpawn) {
+            spawnSpaceship();
+            lastSpawnTime = currentTime;
+            shipsSpawned++;
+        }
+        
+        // Start next round if all ships are spawned and destroyed/escaped
+        if (shipsSpawned >= shipsToSpawn && spaceships.isEmpty()) {
+            startNextRound();
+        }
+        
+        // Update all game elements
+        updateSpaceships();
+        updateTowers();
+        updateProjectiles();
+        checkCollisions();
+        
+        // Check game over condition
+        if (health <= 0) {
+            gameOver = true;
+        }
+        
+        repaint();
+    }
+    
+    private void startNextRound() {
+        round++;
+        shipsToSpawn = 5 + round;
+        shipsSpawned = 0;
+        spawnDelay = Math.max(500, 2000 - round * 100);
+    }
+    
+    private void spawnSpaceship() {
+        int health = round;
+        float speed = 1.0f + (round * 0.1f);
+        spaceships.add(new BasicSpaceship(path, health, speed));
+    }
+    
+    private void updateSpaceships() {
+        Iterator<Spaceship> it = spaceships.iterator();
+        while (it.hasNext()) {
+            Spaceship ship = it.next();
+            ship.move();
+            
+            // Remove ship and decrease health if it reaches the end
+            if (ship.hasReachedEnd()) {
+                health -= ship.getDamage();
+                it.remove();
+            }
+        }
+    }
+    
+    private void updateTowers() {
+        for (Tower tower : towers) {
+            tower.update();
+            
+            // Fire at nearest ship in range
+            if (tower.canFire()) {
+                Spaceship target = findNearestSpaceshipInRange(tower);
+                if (target != null) {
+                    Projectile projectile = tower.fire(target);
+                    if (projectile != null) {
+                        projectiles.add(projectile);
+                    }
+                }
+            }
+        }
+    }
+    
+    private Spaceship findNearestSpaceshipInRange(Tower tower) {
+        Spaceship nearest = null;
+        double minDistance = Double.MAX_VALUE;
+        
+        for (Spaceship ship : spaceships) {
+            double distance = Point2D.distance(tower.getX(), tower.getY(), ship.getX(), ship.getY());
+            if (distance <= tower.getRange() && distance < minDistance) {
+                minDistance = distance;
+                nearest = ship;
+            }
+        }
+        
+        return nearest;
+    }
+    
+    private void updateProjectiles() {
+        Iterator<Projectile> it = projectiles.iterator();
+        while (it.hasNext()) {
+            Projectile projectile = it.next();
+            projectile.move();
+            
+            // Remove projectile if it's off-screen
+            if (projectile.isOffScreen(WIDTH, HEIGHT)) {
+                it.remove();
+            }
+        }
+    }
+    
+    private void checkCollisions() {
+        Iterator<Projectile> projIt = projectiles.iterator();
+        
+        while (projIt.hasNext()) {
+            Projectile projectile = projIt.next();
+            boolean collided = false;
+            
+            Iterator<Spaceship> shipIt = spaceships.iterator();
+            while (shipIt.hasNext() && !collided) {
+                Spaceship ship = shipIt.next();
+                
+                // Check collision
+                if (projectile.collidesWith(ship)) {
+                    ship.takeDamage(projectile.getDamage());
+                    projIt.remove();
+                    collided = true;
+                    
+                    // Remove ship if destroyed and add money
+                    if (ship.isDestroyed()) {
+                        money += ship.getReward();
+                        shipIt.remove();
+                    }
+                }
+            }
+            
+            if (collided) break;
+        }
+    }
+    
+    // Tower placement on click
+    @Override
+    public void mouseClicked(MouseEvent e) {
+        if (gameOver) return;
+        
+        int x = e.getX();
+        int y = e.getY();
+        
+        // Check if a tower is clicked
+        for (Tower tower : towers) {
+            if (tower.contains(x, y)) {
+                selectedTower = tower;
+                
+                // Rotate tower if clicked
+                selectedTower.rotate();
+                return;
+            }
+        }
+        
+        selectedTower = null;
+        
+        // Check if a valid placement location is clicked
+        for (Point loc : placementLocations) {
+            Rectangle towerRect = new Rectangle(loc.x - 20, loc.y - 20, 40, 40);
+            if (towerRect.contains(x, y)) {
+                // Check if tower already exists at this location
+                boolean towerExists = false;
+                for (Tower tower : towers) {
+                    if (tower.getX() == loc.x && tower.getY() == loc.y) {
+                        towerExists = true;
+                        break;
+                    }
+                }
+                
+                if (!towerExists) {
+                    // Place tower if enough money
+                    int basicTowerCost = 50;
+                    if (money >= basicTowerCost) {
+                        towers.add(new BasicTower(loc.x, loc.y));
+                        money -= basicTowerCost;
+                    }
+                }
+                return;
+            }
+        }
+    }
+    
+    // Required MouseListener methods
+    @Override
+    public void mousePressed(MouseEvent e) {}
+    
+    @Override
+    public void mouseReleased(MouseEvent e) {}
+    
+    @Override
+    public void mouseEntered(MouseEvent e) {}
+    
+    @Override
+    public void mouseExited(MouseEvent e) {}
+    
+    // Draw all game elements
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        Graphics2D g2d = (Graphics2D) g;
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        
+        // Draw space background with stars
+        drawBackground(g2d);
+        
+        // Draw path
+        drawPath(g2d);
+        
+        // Draw placement locations
+        drawPlacementLocations(g2d);
+        
+        // Draw towers
+        for (Tower tower : towers) {
+            tower.draw(g2d);
+        }
+        
+        // Draw projectiles
+        for (Projectile projectile : projectiles) {
+            projectile.draw(g2d);
+        }
+        
+        // Draw spaceships
+        for (Spaceship ship : spaceships) {
+            ship.draw(g2d);
+        }
+        
+        // Draw HUD
+        drawHUD(g2d);
+        
+        // Draw game over screen if needed
+        if (gameOver) {
+            drawGameOver(g2d);
+        }
+    }
+    
+    private void drawBackground(Graphics2D g2d) {
+        // Draw stars
+        g2d.setColor(Color.WHITE);
+        for (int i = 0; i < 100; i++) {
+            int size = (int)(Math.random() * 3) + 1;
+            g2d.fillOval((int)(Math.random() * WIDTH), (int)(Math.random() * HEIGHT), size, size);
+        }
+    }
+    
+    private void drawPath(Graphics2D g2d) {
+        g2d.setColor(new Color(50, 50, 100));
+        g2d.setStroke(new BasicStroke(30, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        
+        for (int i = 0; i < path.length - 1; i++) {
+            g2d.drawLine((int)path[i].x, (int)path[i].y, (int)path[i+1].x, (int)path[i+1].y);
+        }
+        
+        // Path borders
+        g2d.setColor(new Color(100, 100, 200));
+        g2d.setStroke(new BasicStroke(32, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[]{10, 10}, 0));
+        
+        for (int i = 0; i < path.length - 1; i++) {
+            g2d.drawLine((int)path[i].x, (int)path[i].y, (int)path[i+1].x, (int)path[i+1].y);
+        }
+    }
+    
+    private void drawPlacementLocations(Graphics2D g2d) {
+        g2d.setColor(new Color(0, 255, 0, 100));
+        
+        for (Point loc : placementLocations) {
+            boolean occupied = false;
+            
+            // Check if tower already exists at this location
+            for (Tower tower : towers) {
+                if (tower.getX() == loc.x && tower.getY() == loc.y) {
+                    occupied = true;
+                    break;
+                }
+            }
+            
+            if (!occupied) {
+                g2d.fillRect(loc.x - 20, loc.y - 20, 40, 40);
+                g2d.setColor(new Color(0, 255, 0, 200));
+                g2d.drawRect(loc.x - 20, loc.y - 20, 40, 40);
+                g2d.setColor(new Color(0, 255, 0, 100));
+            }
+        }
+    }
+    
+    private void drawHUD(Graphics2D g2d) {
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font("Arial", Font.BOLD, 16));
+        
+        // Draw money
+        g2d.drawString("CREDITS: " + money, 10, 30);
+        
+        // Draw health
+        g2d.drawString("HEALTH: " + health, 10, 50);
+        
+        // Draw round
+        g2d.drawString("ROUND: " + round, 10, 70);
+        
+        // Draw tower cost
+        g2d.drawString("TOWER COST: 50", 10, 90);
+    }
+    
+    private void drawGameOver(Graphics2D g2d) {
+        g2d.setColor(new Color(0, 0, 0, 150));
+        g2d.fillRect(0, 0, WIDTH, HEIGHT);
+        
+        g2d.setColor(Color.RED);
+        g2d.setFont(new Font("Arial", Font.BOLD, 40));
+        g2d.drawString("GAME OVER", WIDTH/2 - 120, HEIGHT/2);
+        
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font("Arial", Font.BOLD, 20));
+        g2d.drawString("You survived " + round + " rounds", WIDTH/2 - 100, HEIGHT/2 + 40);
+    }
+    
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            JFrame frame = new JFrame("Space Tower Defense");
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            frame.setResizable(false);
+            frame.add(new SpaceTowerDefense());
+            frame.pack();
+            frame.setLocationRelativeTo(null);
+            frame.setVisible(true);
+        });
+    }
+    
+    //--------------------------------------------------------------------------
+    // GAME ENTITIES
+    //--------------------------------------------------------------------------
+    
+    // Base Entity class for position and collision detection
+    abstract class Entity {
+        protected float x, y;
+        protected int width, height;
+        
+        public Entity(float x, float y, int width, int height) {
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+        }
+        
+        public float getX() { return x; }
+        public float getY() { return y; }
+        
+        public boolean contains(int pointX, int pointY) {
+            return pointX >= x - width/2 && pointX <= x + width/2 &&
+                   pointY >= y - height/2 && pointY <= y + height/2;
+        }
+        
+        public boolean collidesWith(Entity other) {
+            return Math.abs(this.x - other.x) < (this.width + other.width) / 2 &&
+                   Math.abs(this.y - other.y) < (this.height + other.height) / 2;
+        }
+        
+        public abstract void draw(Graphics2D g);
+    }
+    
+    //--------------------------------------------------------------------------
+    // TOWER CLASSES
+    //--------------------------------------------------------------------------
+    
+    abstract class Tower extends Entity {
+        protected int cost;
+        protected int damage;
+        protected int range;
+        protected int fireRate;  // Milliseconds between shots
+        protected long lastFireTime;
+        protected int rotation = 0;  // Degrees, 0 = right, 90 = down, 180 = left, 270 = up
+        protected Color color;
+        
+        public Tower(float x, float y, int width, int height, int cost, int damage, int range, int fireRate, Color color) {
+            super(x, y, width, height);
+            this.cost = cost;
+            this.damage = damage;
+            this.range = range;
+            this.fireRate = fireRate;
+            this.lastFireTime = 0;
+            this.color = color;
+        }
+        
+        public void update() {
+            // Perform any update logic
+        }
+        
+        public boolean canFire() {
+            return System.currentTimeMillis() - lastFireTime > fireRate;
+        }
+        
+        public void rotate() {
+            rotation = (rotation + 90) % 360;
+        }
+        
+        public int getRange() {
+            return range;
+        }
+        
+        public abstract Projectile fire(Spaceship target);
+        
+        @Override
+        public void draw(Graphics2D g) {
+            // Draw tower body
+            g.setColor(color);
+            g.fillRect((int)(x - width/2), (int)(y - height/2), width, height);
+            
+            // Draw tower cannon based on rotation
+            g.setColor(Color.GRAY);
+            int cannonLength = width;
+            int cannonWidth = width / 3;
+            
+            g.translate(x, y);
+            g.rotate(Math.toRadians(rotation));
+            g.fillRect(0, -cannonWidth/2, cannonLength, cannonWidth);
+            g.rotate(-Math.toRadians(rotation));
+            g.translate(-x, -y);
+            
+            // Draw range indicator if selected
+            if (selectedTower == this) {
+                g.setColor(new Color(255, 255, 255, 50));
+                g.fillOval((int)(x - range), (int)(y - range), range*2, range*2);
+                g.setColor(new Color(255, 255, 255, 100));
+                g.drawOval((int)(x - range), (int)(y - range), range*2, range*2);
+            }
+        }
+    }
+    
+    class BasicTower extends Tower {
+        public BasicTower(float x, float y) {
+            super(x, y, 30, 30, 50, 1, 150, 1000, Color.BLUE);
+        }
+        
+        @Override
+        public Projectile fire(Spaceship target) {
+            if (!canFire()) return null;
+            
+            lastFireTime = System.currentTimeMillis();
+            
+            // Calculate direction vector based on rotation
+            float dirX = 0, dirY = 0;
+            switch (rotation) {
+                case 0:   dirX = 1; dirY = 0; break;  // Right
+                case 90:  dirX = 0; dirY = 1; break;  // Down
+                case 180: dirX = -1; dirY = 0; break; // Left
+                case 270: dirX = 0; dirY = -1; break; // Up
+            }
+            
+            return new BasicProjectile(x, y, dirX, dirY, damage);
+        }
+    }
+    
+    //--------------------------------------------------------------------------
+    // PROJECTILE CLASSES
+    //--------------------------------------------------------------------------
+    
+    abstract class Projectile extends Entity {
+        protected float velocityX, velocityY;
+        protected float speed;
+        protected int damage;
+        
+        public Projectile(float x, float y, float dirX, float dirY, int width, int height, float speed, int damage) {
+            super(x, y, width, height);
+            this.speed = speed;
+            this.damage = damage;
+            
+            // Normalize direction vector
+            float length = (float)Math.sqrt(dirX * dirX + dirY * dirY);
+            if (length > 0) {
+                this.velocityX = dirX / length * speed;
+                this.velocityY = dirY / length * speed;
+            } else {
+                this.velocityX = 0;
+                this.velocityY = 0;
+            }
+        }
+        
+        public void move() {
+            x += velocityX;
+            y += velocityY;
+        }
+        
+        public int getDamage() {
+            return damage;
+        }
+        
+        public boolean isOffScreen(int screenWidth, int screenHeight) {
+            return x < -width || x > screenWidth + width || 
+                   y < -height || y > screenHeight + height;
+        }
+    }
+    
+    class BasicProjectile extends Projectile {
+        public BasicProjectile(float x, float y, float dirX, float dirY, int damage) {
+            super(x, y, dirX, dirY, 8, 8, 5.0f, damage);
+        }
+        
+        @Override
+        public void draw(Graphics2D g) {
+            g.setColor(Color.YELLOW);
+            g.fillOval((int)(x - width/2), (int)(y - height/2), width, height);
+        }
+    }
+    
+    //--------------------------------------------------------------------------
+    // SPACESHIP CLASSES
+    //--------------------------------------------------------------------------
+    
+    abstract class Spaceship extends Entity {
+        protected Point2D.Float[] path;
+        protected int pathIndex = 0;
+        protected float speed;
+        protected int maxHealth;
+        protected int health;
+        protected int damage;  // Damage to player when reaching end
+        protected int reward;  // Money earned when destroyed
+        
+        public Spaceship(Point2D.Float[] path, int width, int height, int health, float speed, int damage, int reward) {
+            super(path[0].x, path[0].y, width, height);
+            this.path = path;
+            this.speed = speed;
+            this.maxHealth = health;
+            this.health = health;
+            this.damage = damage;
+            this.reward = reward;
+        }
+        
+        public void move() {
+            if (pathIndex >= path.length - 1) return;
+            
+            // Calculate direction to next path point
+            float targetX = path[pathIndex + 1].x;
+            float targetY = path[pathIndex + 1].y;
+            
+            float dx = targetX - x;
+            float dy = targetY - y;
+            float distance = (float)Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance <= speed) {
+                // Reached current path point, move to next one
+                pathIndex++;
+                if (pathIndex < path.length - 1) {
+                    move();
+                }
+            } else {
+                // Move towards next path point
+                x += dx / distance * speed;
+                y += dy / distance * speed;
+            }
+        }
+        
+        public void takeDamage(int damage) {
+            health -= damage;
+        }
+        
+        public boolean isDestroyed() {
+            return health <= 0;
+        }
+        
+        public boolean hasReachedEnd() {
+            return pathIndex >= path.length - 1;
+        }
+        
+        public int getDamage() {
+            return damage;
+        }
+        
+        public int getReward() {
+            return reward;
+        }
+        
+        @Override
+        public void draw(Graphics2D g) {
+            // Draw ship body
+            g.setColor(getColor());
+            g.fillRect((int)(x - width/2), (int)(y - height/2), width, height);
+            
+            // Draw health bar
+            int healthBarWidth = width;
+            int healthBarHeight = 5;
+            g.setColor(Color.RED);
+            g.fillRect((int)(x - healthBarWidth/2), (int)(y - height/2 - 10), healthBarWidth, healthBarHeight);
+            g.setColor(Color.GREEN);
+            g.fillRect((int)(x - healthBarWidth/2), (int)(y - height/2 - 10), 
+                      (int)(healthBarWidth * (float)health / maxHealth), healthBarHeight);
+        }
+        
+        protected abstract Color getColor();
+    }
+    
+    class BasicSpaceship extends Spaceship {
+        public BasicSpaceship(Point2D.Float[] path, int health, float speed) {
+            super(path, 30, 20, health, speed, 10, 20);
+        }
+        
+        @Override
+        protected Color getColor() {
+            return new Color(255, 0, 0);
+        }
+    }
+}
