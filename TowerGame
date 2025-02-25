@@ -1,0 +1,139 @@
+//Malia Moreno | 25 February 2025//
+package com.mycompany.towergame;
+
+//import neccessary packages//
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.awt.geom.Point2D;
+
+public class TowerGame {
+    //make constant variables --  speciifcally screen size//
+    public static final int GameWidth = 800;
+    public static final int GameHeight = 600;
+    
+    //start game//
+    public static void main(String[] args) {
+        
+        SwingUtilities.invokeLater(() -> {
+            //make frame for the game//
+            JFrame frame = new JFrame("Tower Defense");
+            frame.setSize(TowerGame.GameWidth, TowerGame.GameHeight);
+            frame.setLocationRelativeTo(null);
+            frame.setResizable(false);
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
+            TowerDefense gamePanel = new TowerDefense();
+            frame.add(gamePanel);
+            frame.setVisible(true);
+        });
+        System.out.println("I Work!");
+    }
+}
+
+
+class TowerDefense extends JPanel implements ActionListener, MouseListener{
+    //set start game variables//
+    private int money = 100, health = 100, round = 1;       //make basic display info//
+    private long lastSpawnTime = 0, spawnDelay = 2000;      //delays spawn time for ships//
+    private int shipsToSpawn = 5, shipsSpawned = 0;     //tell how many ships should be on screen//
+    private boolean gameOver = false;       //check if game is over//
+    private Timer gameTimer;        //create game timer//
+
+    //set game elements arrays (of classes)//
+    private Point2D.Float[] path;
+    
+    //make placement position when building//
+    private Point currentPlacement = null;
+    
+    
+    //make constructor class for tower defense//
+    public TowerDefense(){
+        //set display screen//
+        setPreferredSize(new Dimension(TowerGame.GameWidth, TowerGame.GameHeight));
+        setBackground(Color.BLACK);
+        addMouseListener(this);
+        
+        //initialize game timer 60FPS//
+        gameTimer = new Timer(16, this);
+        
+        //deine path//
+        path = new Point2D.Float[] {
+            new Point2D.Float(-50, 300),  // Start off-screen
+            new Point2D.Float(50, 300),
+            new Point2D.Float(200, 300),
+            new Point2D.Float(300, 200),
+            new Point2D.Float(600, 200),
+            new Point2D.Float(400, 400),
+            new Point2D.Float(600, 400),
+            new Point2D.Float(700, 400),
+            new Point2D.Float(850, 400)   // End off-screen
+        };
+        
+        gameTimer.start();
+    }
+    
+    //draw path//
+    private void drawPath(Graphics2D g2d){
+        //set color of path//
+        g2d.setColor(new Color(50, 50, 100));
+        g2d.setStroke(new BasicStroke(30, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        //actually draw path//
+        for(int i=0; i<path.length-1; i++){
+            g2d.drawLine((int)path[i].x, (int)path[i].y, (int)path[i+1].x, (int)path[i+1].y);
+        }
+        
+        //make path borders//
+        g2d.setColor(new Color(100, 100, 200));
+        g2d.setStroke(new BasicStroke(32, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[]{10, 10}, 0));
+        //actually draw path again//
+        for (int i = 0; i < path.length - 1; i++) {
+            g2d.drawLine((int)path[i].x, (int)path[i].y, (int)path[i+1].x, (int)path[i+1].y);
+        }
+    }
+    
+    //Main Game Loop//
+    //@Override
+    public void actionPreformed(ActionEvent e){
+        if(!gameOver){
+            System.out.println("I'm active");
+            repaint(); //refresh screen//
+        }
+    }
+    
+  
+//    
+//
+// Mouse listener methods (required for interface) //
+    @Override
+    public void mouseClicked(MouseEvent e) {}
+    @Override
+    public void mousePressed(MouseEvent e) {}
+    @Override
+    public void mouseReleased(MouseEvent e) {}
+    @Override
+    public void mouseEntered(MouseEvent e) {}
+    @Override
+    public void mouseExited(MouseEvent e) {}
+    // Override paintComponent to draw the game //
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        Graphics2D g2d = (Graphics2D) g;
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        
+        //draw words//
+        g.setColor(Color.WHITE);
+        g.drawString("Money: " + money + " | Health: " + health + " | Round: " + round, 10, 20);
+        
+        //draw path//
+        drawPath(g2d);
+    }
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+    }
+}
