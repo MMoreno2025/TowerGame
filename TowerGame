@@ -1,4 +1,4 @@
-//Malia Moreno | 25 February 2025//
+//Malia && Colin | 25 February 2025//
 package com.mycompany.towergame;
 
 //import neccessary packages//
@@ -18,7 +18,7 @@ public class TowerGame {
     //start game//
     public static void main(String[] args) {
         
-        SwingUtilities.invokeLater(() -> {
+        SwingUtilities.invokeLater(() -> {      //draws game safly and prevents freezing//
             //make frame for the game//
             JFrame frame = new JFrame("Tower Defense");
             frame.setSize(TowerGame.GameWidth, TowerGame.GameHeight);
@@ -44,6 +44,7 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener{
     private Timer gameTimer;        //create game timer//
 
     //set game elements arrays (of classes)//
+    private ArrayList<Spaceship> spaceships = new ArrayList<>();
     private Point2D.Float[] path;
     
     //make placement position when building//
@@ -60,7 +61,7 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener{
         //initialize game timer 60FPS//
         gameTimer = new Timer(16, this);
         
-        //deine path//
+        //deine path points to connect//
         path = new Point2D.Float[] {
             new Point2D.Float(-50, 300),  // Start off-screen
             new Point2D.Float(50, 300),
@@ -95,14 +96,61 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener{
         }
     }
     
+    //Create Spaceships//
+    private void startNextRound(){
+        round++;
+        shipsToSpawn = 5*round;
+        shipsSpawned = 0;
+        spawnDelay = Math.max(500, 2000-round*100);
+    }
+    
+    private void spawnSpaceship(){
+        int health = round;
+        float speed = 1.0f + (round * 0.1f);
+        spaceships.add(new BasicSpaceship(path, health, speed));
+    }
+    
+    private void updateSpaceships(){
+        Iterator<Spaceship> it = spaceships.iterator();
+        while(it.hasNext()){
+            Spaceship ship = it.next();
+            ship.move();
+            
+            //remove ships and decrease health of player if ships reach the end//
+            
+            if(ship.hasReachedEnd()){
+                health -= ship.getDamage();
+                it.remove();
+            }
+        }
+    }
+    
+    
+    
     //Main Game Loop//
     //@Override
-    public void actionPreformed(ActionEvent e){
+    public void actionPerformed(ActionEvent e){
         if(!gameOver){
-            System.out.println("I'm active");
+            //create spaceships//
+            long currentTime = System.currentTimeMillis();
+            if(currentTime-lastSpawnTime > spawnDelay && shipsSpawned < shipsToSpawn){
+                spawnSpaceship();
+                lastSpawnTime = currentTime;
+                shipsSpawned++;
+            }
+            
+            //start a new round if all spaceShips are spawned and destroyed (or escaped)//
+            if(shipsSpawned >= shipsToSpawn && spaceships.isEmpty()){
+                startNextRound();
+            }
+            
+            //update game elements//
+            updateSpaceships();
+            
             repaint(); //refresh screen//
         }
     }
+    
     
   
 //    
@@ -129,11 +177,124 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener{
         g.setColor(Color.WHITE);
         g.drawString("Money: " + money + " | Health: " + health + " | Round: " + round, 10, 20);
         
-        //draw path//
-        drawPath(g2d);
+        //draw elements//
+        drawPath(g2d);      //draw path//
+        for(Spaceship ship: spaceships){
+            ship.draw(g2d);
+        }
     }
-    @Override
-    public void actionPerformed(ActionEvent e) {
+    //@Override
+    public void actionPreformed(ActionEvent e) {
         throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+    }
+    
+    //make an entity//
+    abstract class Entity{
+        protected float x,y;
+        protected int width, height;
+        
+        public Entity(float x, float y, int width, int height){
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+        }
+        
+        public float getX(){return x;}
+        public float getY(){return y;}
+        
+        public boolean contains(int pointX, int pointY){
+            return pointX >= x-width/2 && pointX <= x+width/2 && 
+                    pointY >= y-height/2 && pointY <= y+height/2;
+        }
+        
+        public abstract void draw(Graphics2D g);
+    }
+    
+    //main spaceship class//
+    abstract class Spaceship extends Entity{
+        protected Point2D.Float[] path;
+        protected int pathIndex = 0;
+        protected float speed;
+        protected int maxHealth;
+        protected int health;
+        protected int damage;
+        protected int reward;
+        
+        //make constructor//
+        public Spaceship(Point2D.Float[] path, int width, int height, int health, float speed, int damage, int reward){
+            super(path[0].x, path[0].y, width, height);
+            this.path = path;
+            this.speed = speed;
+            this.maxHealth = health;
+            this.health = health;
+            this.damage = damage;
+            this.reward = reward;
+        }
+        
+        //make the spaceships move//
+        public void move(){
+            if(pathIndex >= path.length -1) return;
+            
+            //calculate spaceships to move accordnig to path//
+            float targetX = path[pathIndex+1].x;
+            float targetY = path[pathIndex+1].y;
+            
+            float dx = targetX-x;
+            float dy = targetY-y;
+            float distance = (float)Math.sqrt(dx*dx + dy*dy);
+            
+            if(distance <= speed){
+                pathIndex++;
+                if(pathIndex<path.length-1){
+                    move();
+                }
+            }else{
+                x += dx/distance * speed;
+                y += dy/distance * speed;
+            }
+        }
+        
+        //other aspects of ships taking damage//
+        public void takeDamage(int damage){
+            health -= damage;
+        }
+        public boolean hasReachedEnd(){
+            return pathIndex >= path.length-1;
+        }
+        public int getDamage(){
+            return damage;
+        }
+        public int getReward(){
+            return reward;
+        }
+        
+        //draw ship//
+        public void draw(Graphics2D g){
+            g.setColor(Color.GREEN);
+            g.fillRect((int)(x-width/2), (int)(y-height/2), width, height);
+            
+            //draw health bar over ship//
+            int healthBarWidth = width;
+            int healthBarHeight = 5;
+            g.setColor(Color.RED);
+            g.fillRect((int)(x-healthBarWidth/2), (int)(y-height/2-10), healthBarWidth, healthBarHeight);
+            g.setColor(Color.GREEN);
+            g.fillRect((int)(x-healthBarWidth/2), (int)(y-health/2-10), 
+                    (int)(healthBarWidth*(float)health/maxHealth), healthBarHeight);
+        }
+        
+        protected abstract Color getColor();
+    }
+    
+    class BasicSpaceship extends Spaceship{
+        public BasicSpaceship(Point2D.Float[] path, int health, float speed){
+            super(path, 30, 20, health, speed, 10, 20);
+        }
+        
+       @Override
+        protected Color getColor(){
+            return new Color(255, 0, 0);
+        }
     }
 }
