@@ -46,11 +46,12 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener{
     //set game elements arrays (of classes)//
     private ArrayList<Spaceship> spaceships = new ArrayList<>();
     private ArrayList<Point> placementLocations = new ArrayList<>();
-    //private ArrayList<Tower> towers = new ArrayList<>();
-    private Point2D.Float[] path;
+    private ArrayList<Tower> towers = new ArrayList<>();
     
     //make placement position when building//
+    private Point2D.Float[] path;
     private Point currentPlacement = null;
+    private Tower selectedTower = null;
     
     
     //make constructor class for tower defense//
@@ -123,13 +124,12 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener{
             boolean occupied = false;
             
             //check if tower already exists in location//
-            /*
             for(Tower tower: towers){
                 if(tower.getX() == loc.x && tower.getY() == loc.y){
                     occupied = true;
                     break;
                 }
-            }*/
+            }
             
             if(!occupied){
                 g2d.fillRect(loc.x-20, loc.y-20, 40, 40);
@@ -169,6 +169,85 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener{
         }
     }
     
+    private void updateTowers(){
+        for(Tower tower: towers){
+            tower.update();
+            
+            //fire at nearby ship in range//
+            if(tower.canFire()){
+                Spaceship target = findNearestSpaceshipInRange(tower);
+                if(target != null){
+                    Projectile projectil = tower.fire(target);
+                    if(project != null){
+                        projectil.add(projectile);
+                    }
+                }
+            }
+        }
+    }
+    
+    private Spaceship findNearestSpaceshipInRang(Tower tower){
+        Spaceship nearest = null;
+        double minDistance = Double.MAX_VALUE;
+        
+        for(Spaceship ship: spaceships){
+            double distance = Point2D.distance(tower.getX(), tower.getY(), ship.getX(), ship.getY());
+            if(distance<=tower.getRange() && distance<minDistance){
+                minDistance = distance;
+                nearest = ship;
+            }
+        }
+        
+        return nearest;
+    }
+    //place tower on click//
+    @Override
+    public void mouseClicked(MouseEvent e){
+        if(!GameOver){
+            int x = e.getX();
+            int y = e.getY();
+            
+            //check if tower is clicked//
+            for(Tower tower: towers){
+                if(tower.contains(x, y)){
+                    selectedTower = tower;
+                    
+                    //rotate towers if clicked//
+                    selectedTower.rotate();
+                    return;
+                }
+            }
+            
+            selectedTower = null;
+            
+            //check if user clikced location to create tower//
+            for(Point loc: placementLocations){
+                Rectangle towerRect = new Rectangle(loc.x-20, loc.y-20, 40, 40);
+                if(towerRect.contains(x, y)){
+                    //check if tower already exists there//
+                    boolean towerExists = false;
+                    for(Tower tower: towers){
+                        if(tower.getX() == loc.x && tower.getY() == loc.y){
+                            towerExists = true;
+                            break;
+                        }
+                    }
+                    
+                    if(!towerExists){
+                        //place tower if have enought money//
+                        int basicTowerCost = 50;
+                        if(money >= basicTowerCost){
+                            towers.add(new BasicTower(loc.x, loc.y));
+                            money -= basicTowerCost;
+                        }
+                    }
+                    
+                    return;
+                }
+            }
+        }
+    }
+    
     
     
     //Main Game Loop//
@@ -190,6 +269,7 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener{
             
             //update game elements//
             updateSpaceships();
+            updateTowers();
             
             repaint(); //refresh screen//
         }
@@ -221,12 +301,19 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener{
         g.setColor(Color.WHITE);
         g.drawString("Money: " + money + " | Health: " + health + " | Round: " + round, 10, 20);
         
+        //draw tower cost//
+        g2d.drawString("Tower Cost: 50", 10, 90);
+        
         //draw elements//
         drawPath(g2d);      //draw path//
         for(Spaceship ship: spaceships){
             ship.draw(g2d);
         }
         drawPlacmentLocations(g2d);     //draw tower locations//
+        for(Tower tower: towers){       //draw towers//
+            tower.draw(g2d);
+        }
+        
         
     }
     //@Override
@@ -341,6 +428,108 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener{
        @Override
         protected Color getColor(){
             return new Color(255, 0, 0);
+        }
+    }
+    
+    
+    
+    
+    //main tower class//
+    abstract class Tower extends Entity{
+        protected int cost, damage, range, fireRate, rotation = 0;
+        protected long lastFireTime;
+        protected Color color;
+        protected boolean canTargetStealthed;
+        
+        public Tower(float x, float y, int width, int height, int cost, int damage, int range, int fireRate, Color color, boolean canTargetStealthed){
+            super(x, y, width, height);
+            this.cost = cost;
+            this.damage = damage;
+            this.range = range;
+            this.fireRate = fireRate;
+            this.lastFireTime = 0;
+            this.color = color;
+            this.canTargetStealthed = canTargetStealthed;
+        }  
+        
+        public void update(){}
+        
+        public boolean canFire(){
+            return System.currentTimeMillis()-lastFireTime > fireRate;
+        }
+        
+        public void rotate(){
+            rotation = (rotation + 90) % 360;
+        }
+        
+        public int getRange(){
+            return range;
+        }
+        
+        public int getCost(){
+            return cost;
+        }
+        
+        public boolean canTargetStealthed(){
+            return canTargetStealthed;
+        }
+        
+        public abstract Projectile fire(Spaceship target);
+        
+        //helps tower find best target from a list of spaceships//
+        public Spaceship findTarget(ArrayList<Spaceship> spaceships){
+            Spaceship bestTarget = null;
+            float closestDistance = range+1;
+                
+            for(Spaceship ship: spaceships){
+                //skip stealth ships if tower can't target them//
+                if(ship.isStealthed() && !canTargetStealthed){
+                    continue;
+                }
+                
+                float distance = (float) Math.sqrt(
+                        Math.pow(ship.getX() - this.x, 2)
+                        + Math.pow(ship.getY() - this.y, 2)
+                );
+                
+                if(distance <= range && distance<closestDistance){
+                    closestDistance = distance;
+                    bestTarget = ship;
+                }
+            }
+            
+            return bestTarget;
+        }
+        
+        @Override
+        public void draw(Graphics2D g){
+            drawTowerBase(g);
+            drawTowerCannon(g);
+            
+            if(selectedTower == this){
+                g.setColor(new Color(255, 255, 255, 50));
+                g.fillOval((int) (x - range), (int) (y - range), range * 2, range * 2);
+                g.setColor(new Color(255, 255, 255, 100));
+                g.drawOval((int) (x - range), (int) (y - range), range * 2, range * 2);
+            }
+        }
+        
+        //customizing tower apperance//
+        protected void drawTowerBase(Graphics2D g) {
+            g.setColor(color);
+            g.fillRect((int) (x - width / 2), (int) (y - height / 2), width, height);
+        }
+
+        protected void drawTowerCannon(Graphics2D g) {
+            g.setColor(Color.GRAY);
+            int cannonLength = width;
+            int cannonWidth = width / 3;
+
+            g.translate(x, y);
+            g.rotate(Math.toRadians(rotation));
+            g.fillRect(0, -cannonWidth / 2, cannonLength, cannonWidth);
+            g.rotate(-Math.toRadians(rotation));
+            g.translate(-x, -y);
         }
     }
 }
