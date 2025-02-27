@@ -45,6 +45,8 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener{
 
     //set game elements arrays (of classes)//
     private ArrayList<Spaceship> spaceships = new ArrayList<>();
+    private ArrayList<Point> placementLocations = new ArrayList<>();
+    //private ArrayList<Tower> towers = new ArrayList<>();
     private Point2D.Float[] path;
     
     //make placement position when building//
@@ -74,6 +76,22 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener{
             new Point2D.Float(850, 400)   // End off-screen
         };
         
+        //define places to put tower//
+        placementLocations.add(new Point(150, 240));
+        placementLocations.add(new Point(230, 180));
+        placementLocations.add(new Point(320, 140));
+        placementLocations.add(new Point(420, 140));
+        placementLocations.add(new Point(520, 140));
+        placementLocations.add(new Point(620, 140));
+        placementLocations.add(new Point(650, 240));
+        placementLocations.add(new Point(560, 330));
+        
+        placementLocations.add(new Point(150, 360));
+        placementLocations.add(new Point(260, 340));
+        placementLocations.add(new Point(330, 265));
+        placementLocations.add(new Point(440, 265));
+        
+        
         gameTimer.start();
     }
     
@@ -93,6 +111,32 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener{
         //actually draw path again//
         for (int i = 0; i < path.length - 1; i++) {
             g2d.drawLine((int)path[i].x, (int)path[i].y, (int)path[i+1].x, (int)path[i+1].y);
+        }
+    }
+    
+    //draw towers//
+    private void drawPlacmentLocations(Graphics2D g2d){
+        g2d.setColor(new Color(0, 255, 0, 100));
+        
+        //check if location is bought yet//
+        for(Point loc: placementLocations){
+            boolean occupied = false;
+            
+            //check if tower already exists in location//
+            /*
+            for(Tower tower: towers){
+                if(tower.getX() == loc.x && tower.getY() == loc.y){
+                    occupied = true;
+                    break;
+                }
+            }*/
+            
+            if(!occupied){
+                g2d.fillRect(loc.x-20, loc.y-20, 40, 40);
+                g2d.setColor(new Color(0, 255, 0, 200));
+                g2d.drawRect(loc.x-20, loc.y-20, 40, 40);
+                g2d.setColor(new Color(0, 255, 0, 100));
+            }
         }
     }
     
@@ -182,6 +226,8 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener{
         for(Spaceship ship: spaceships){
             ship.draw(g2d);
         }
+        drawPlacmentLocations(g2d);     //draw tower locations//
+        
     }
     //@Override
     public void actionPreformed(ActionEvent e) {
@@ -291,7 +337,7 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener{
         public BasicSpaceship(Point2D.Float[] path, int health, float speed){
             super(path, 30, 20, health, speed, 10, 20);
         }
-        
+       
        @Override
         protected Color getColor(){
             return new Color(255, 0, 0);
