@@ -146,6 +146,13 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener {
         int health = round;
         float speed = 1.0f + (round * 0.1f);
         spaceships.add(new BasicSpaceship(path, health, speed));
+        //make basic spaceship move in a special way//
+        for(Spaceship spaceship : spaceships){
+            if(spaceship instanceof BasicSpaceship){
+                BasicSpaceship basicship = (BasicSpaceship) spaceship;
+                //basicship.moveInPattern();
+            }
+        }
     }
     
     private void updateSpaceships() {
@@ -608,6 +615,10 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener {
         protected int damage;  // Damage to player when reaching end
         protected int reward;  // Money earned when destroyed
         
+        public Point2D.Float[] getPath() {
+            return path;
+        }
+        
         public Spaceship(Point2D.Float[] path, int width, int height, int health, float speed, int damage, int reward) {
             super(path[0].x, path[0].y, width, height);
             this.path = path;
@@ -682,13 +693,21 @@ class TowerDefense extends JPanel implements ActionListener, MouseListener {
     }
     
     class BasicSpaceship extends Spaceship {
-        public BasicSpaceship(Point2D.Float[] path, int health, float speed) {
-            super(path, 30, 20, health, speed, 10, 20);
+    public BasicSpaceship(Point2D.Float[] path, int health, float speed) {
+        super(path, 30, 20, health, speed, 10, 20);
+    }
+    
+    @Override
+    protected Color getColor() {
+        return new Color(255, 0, 0); // Red color for BasicSpaceship
+    }
+    
+    // New method that makes BasicSpaceship behave differently
+    public void moveInPattern() {
+        // A simple movement pattern to show a special behavior
+        for (Point2D.Float point : getPath()) {
+            point.setLocation(point.x + Math.sin(System.currentTimeMillis() / 1000.0) * 10, point.y);
         }
-        
-        @Override
-        protected Color getColor() {
-            return new Color(255, 0, 0);
-        }
+    }
     }
 }
